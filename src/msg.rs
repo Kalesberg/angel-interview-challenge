@@ -13,6 +13,10 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
   AddUser {user: String},
   RemoveUser {user: String},
+  UpdateUsers {
+    add: Vec<String>,
+    remove: Vec<String>
+  }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
