@@ -14,8 +14,8 @@ pub fn instantiate(
   msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
   let state = State {
-    users: msg.users,
-    owner: msg.owner,
+    owner: deps.api.addr_validate(&msg.owner)?,
+    users: [],
   };
 
   config(deps.storage).save(&state)?;
@@ -25,45 +25,52 @@ pub fn instantiate(
 pub fn execute(
   deps: DepsMut,
   _env: Env,
-  _info: MessageInfo,
+  info: MessageInfo,
   msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
   match msg {
-    ExecuteMsg::AddUser {user} => add_user(deps, user),
-    ExecuteMsg::RemoveUser {user} => remove_user(deps, user),
+    ExecuteMsg::AddUser {user} => add_user(deps, info, user),
+    ExecuteMsg::RemoveUser {user} => remove_user(deps, info, user),
   }
 }
 
 fn add_user(
   deps: DepsMut,
-  user: Addr,
+  info: MessageInfo,
+  user: String,
 ) -> Result<Response, ContractError> {
   let mut state = config(deps.storage).load()?;
-
-  if user.ne(&state.owner) {
+  if info.sender != state.owner {
     return Err(ContractError::Unauthorized {});
   }
 
-  validate_name(user.as_str())?;
+  validate_name(user)?;
+  let userAddr = deps.api.addr_validate(&user)?;
 
-  state.users.push(user);
-  config(deps.storage).save(&state)?;
-
-  Ok(Response::default())
+  let index = state.users.iter().position(|x| *x == userAddr).unwrap();
+  if index > -1 {
+    Ok(Response::default())
+  } else {
+    state.users.push(userAddr);
+    config(deps.storage).save(&state)?;
+    Ok(Response::default())
+  }
 }
 
 fn remove_user(
   deps: DepsMut,
-  user: Addr,
+  info: MessageInfo,
+  user: String,
 ) -> Result<Response, ContractError> {
   let mut state = config(deps.storage).load()?;
 
-  if user.ne(&state.owner) {
+  if info.sender != state.owner {
     return Err(ContractError::Unauthorized {});
   }
 
-  let index = state.users.iter().position(|x| *x == user).unwrap();
-  if index > 0 {
+  let userAddr = deps.api.addr_validate(&user)?;
+  let index = state.users.iter().position(|x| *x == userAddr).unwrap();
+  if index > -1 {
     state.users.remove(index);
     config(deps.storage).save(&state)?;
   }
@@ -92,10 +99,11 @@ fn get_users(
 
 fn get_user(
   deps: Deps,
-  user: Addr,
+  user: String,
 ) -> StdResult<ExistResponse> {
   let state = config_read(deps.storage).load()?;
-  let exist = state.users.contains(&user);
+  let userAddr = deps.api.addr_validate(&user)?;
+  let exist = state.users.contains(&userAddr);
   
   Ok(ExistResponse {exist})
 }
